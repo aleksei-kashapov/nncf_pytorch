@@ -44,6 +44,7 @@ class HWConfigType(Enum):
 HW_CONFIG_TYPE_TARGET_DEVICE_MAP = {
     'ANY': HWConfigType.CPU.value,
     'CPU': HWConfigType.CPU.value,
+    'CPU_VNNI': HWConfigType.CPU.value,
     'VPU': HWConfigType.VPU.value,
     'GPU': HWConfigType.GPU.value,
     'TRIAL': None
@@ -145,7 +146,7 @@ class HWConfig(List):
         raise RuntimeError("Invalid quantization granularity specified in HW config")
 
     @staticmethod
-    def get_qconf_from_hw_config_subdict(quantization_subdict: Dict, for_weights=False):
+    def get_qconf_from_hw_config_subdict(quantization_subdict: Dict, for_weights=False, is_saturation_fix=False):
         bits = quantization_subdict["bits"]
         mode = HWConfig.get_quantization_mode_from_config_value(quantization_subdict["mode"])
         is_per_channel = HWConfig.get_is_per_channel_from_config_value(quantization_subdict["granularity"])
@@ -167,11 +168,13 @@ class HWConfig(List):
                     "Invalid value of quantizer parameter `level_high`.\
                          The parameter must be consistent with other parameters!"
 
+
         return QuantizerConfig(bits=bits,
                                mode=mode,
                                per_channel=is_per_channel,
                                signedness_to_force=signedness_to_force,
-                               is_weights=for_weights)
+                               is_weights=for_weights,
+                               is_saturation_fix=is_saturation_fix)
 
     @staticmethod
     def is_qconf_list_corresponding_to_unspecified_op(qconf_list: Optional[List[QuantizerConfig]]):
@@ -198,13 +201,26 @@ class HWConfig(List):
 
             if self.QUANTIZATION_ALGORITHM_NAME in op_dict:
                 allowed_qconfs = op_dict[self.QUANTIZATION_ALGORITHM_NAME][config_key]
+                # if for_weights:
+                #     if self.target_device == 'CPU':
+                #         for conf in allowed_qconfs:
+                #             conf['bits'] = 7
+                #             if conf['mode'] == 'symmetric':
+                #                 conf['level_low'] = -64
+                #                 conf['level_high'] = 63
+
             else:
                 allowed_qconfs = []
+
+            is_saturation_fix = False
+            if self.target_device == "CPU" and for_weights:
+                is_saturation_fix = True
+
 
             qconf_list_with_possible_duplicates = []
             for hw_config_qconf_dict in allowed_qconfs:
                 qconf_list_with_possible_duplicates.append(
-                    self.get_qconf_from_hw_config_subdict(hw_config_qconf_dict, for_weights))
+                    self.get_qconf_from_hw_config_subdict(hw_config_qconf_dict, for_weights, is_saturation_fix))
 
             qconf_list = list(OrderedDict.fromkeys(qconf_list_with_possible_duplicates))
 

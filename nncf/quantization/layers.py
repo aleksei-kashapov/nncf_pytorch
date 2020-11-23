@@ -23,7 +23,8 @@ from nncf.debug import is_debug
 from nncf.functions import clamp
 from nncf.nncf_logger import logger as nncf_logger
 from .quantize_functions import symmetric_quantize, asymmetric_quantize, ExportQuantizeToFakeQuantize, \
-    get_scale_zp_from_input_low_input_high, ExportQuantizeToONNXQuantDequant, TuneRange
+    ExportQuantizeToFakeQuantizeWithClip, get_scale_zp_from_input_low_input_high, ExportQuantizeToONNXQuantDequant, \
+    TuneRange
 from ..layer_utils import COMPRESSION_MODULES
 from ..registry import Registry
 from ..utils import get_per_channel_scale_shape, get_flat_tensor_contents_string, no_jit_trace, is_tracing_state
@@ -45,11 +46,16 @@ class QuantizerConfig:
                  input_shape=None,
                  is_weights=False,
                  logarithm_scale=False):
+                 is_saturation_fix=False):
         self.bits = bits
         self.mode = mode
         self.signedness_to_force = signedness_to_force
         self.per_channel = per_channel
         self.is_weights = is_weights
+        self.is_saturation_fix = is_saturation_fix
+        # Fine tune for lower bitwidth
+        if self.is_saturation_fix:
+            self.bits -= 1
         self.input_shape = input_shape
         self.logarithm_scale = logarithm_scale
 
@@ -93,6 +99,7 @@ class BaseQuantizer(nn.Module):
         self.input_shape = config.input_shape
         self.per_channel = config.per_channel
         self.is_weights = config.is_weights
+        self.is_saturation_fix = config.is_saturation_fix
         self.signedness_to_force = config.signedness_to_force
         self._is_using_log_scale_storage = config.logarithm_scale
         self._num_bits = nn.Parameter(torch.IntTensor([config.bits]), requires_grad=False)
@@ -385,10 +392,16 @@ class SymmetricQuantizer(BaseQuantizer):
             input_high = input_range
 
             if self._export_mode == QuantizerExportMode.ONNX_QUANTIZE_DEQUANTIZE_PAIRS:
-                y_scale, y_zero_point = get_scale_zp_from_input_low_input_high(self.level_low,
-                                                                               self.level_high,
-                                                                               input_low,
-                                                                               input_high)
+                if self.is_saturation_fix:
+                    y_scale, y_zero_point = get_scale_zp_from_input_low_input_high(2 * self.level_low,
+                                                                                   2 * self.level_high,
+                                                                                   2 * input_low,
+                                                                                   2 * input_high)
+                else:
+                    y_scale, y_zero_point = get_scale_zp_from_input_low_input_high(self.level_low,
+                                                                                   self.level_high,
+                                                                                   input_low,
+                                                                                   input_high)
 
         if self._export_mode == QuantizerExportMode.ONNX_QUANTIZE_DEQUANTIZE_PAIRS:
             if self.per_channel:
@@ -400,6 +413,12 @@ class SymmetricQuantizer(BaseQuantizer):
                                    "doesn't support per channel quantization")
             return ExportQuantizeToONNXQuantDequant.apply(x, y_scale, y_zero_point)
         if self._export_mode == QuantizerExportMode.FAKE_QUANTIZE:
+            if self.is_saturation_fix:
+                # return ExportQuantizeToFakeQuantizeWithClip.apply(x, 2 * self.levels, input_low, input_high,
+                #                                                   2 * input_low, 2 * input_high,
+                #                                                   2 * input_low, 2 * input_high)
+                return ExportQuantizeToFakeQuantize.apply(x, self.levels, 2 * input_low, 2 * input_high,
+                                                          2 * input_low, 2 * input_high)
             return ExportQuantizeToFakeQuantize.apply(x, self.levels, input_low, input_high, input_low, input_high)
         raise RuntimeError
 

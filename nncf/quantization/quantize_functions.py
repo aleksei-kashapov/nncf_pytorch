@@ -116,6 +116,23 @@ def _quantize_autograd_to_range(input_, input_low, input_high, levels):
     return output
 
 
+class ExportQuantizeToFakeQuantizeWithClip(torch.autograd.Function):
+    @staticmethod
+    def symbolic(g, input_, levels, clip_input_low, clip_input_high,
+                 input_low, input_high, output_low, output_high):
+        clipped = g.op("Clip", input_, clip_input_low, clip_input_high)
+        return g.op("FakeQuantize", clipped, input_low, input_high, output_low, output_high, levels_i=levels)
+
+    @staticmethod
+    def forward(ctx, input_, levels, clip_input_low, clip_input_high, input_low, input_high, output_low, output_high):
+        return input_
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        # backward is not used during export
+        return grad_output
+
+
 class ExportQuantizeToFakeQuantize(torch.autograd.Function):
     @staticmethod
     def symbolic(g, input_, levels, input_low, input_high, output_low, output_high):

@@ -11,6 +11,7 @@
  limitations under the License.
 """
 import torch
+from torch.onnx.symbolic_helper import _parse_arg
 import warnings
 
 from nncf.utils import add_domain
@@ -120,7 +121,9 @@ class ExportQuantizeToFakeQuantizeWithClip(torch.autograd.Function):
     @staticmethod
     def symbolic(g, input_, levels, clip_input_low, clip_input_high,
                  input_low, input_high, output_low, output_high):
-        clipped = g.op("Clip", input_, clip_input_low, clip_input_high)
+        clip_input_low = _parse_arg(clip_input_low, 'f')
+        clip_input_high = _parse_arg(clip_input_high, 'f')
+        clipped = g.op("Clip", input_, max_f=clip_input_high, min_f=clip_input_low)
         return g.op("FakeQuantize", clipped, input_low, input_high, output_low, output_high, levels_i=levels)
 
     @staticmethod
@@ -140,6 +143,26 @@ class ExportQuantizeToFakeQuantize(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, input_, levels, input_low, input_high, output_low, output_high):
+        return input_
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        # backward is not used during export
+        return grad_output
+
+
+class ExportQuantizeToONNXQuantDequantWithClip(torch.autograd.Function):
+    @staticmethod
+    def symbolic(g, input_, y_scale, y_zero_point, clip_input_low, clip_input_high):
+        clip_input_low = _parse_arg(clip_input_low, 'f')
+        clip_input_high = _parse_arg(clip_input_high, 'f')
+        clipped = g.op("Clip", input_, max_f=clip_input_high, min_f=clip_input_low)
+        quantized = g.op("QuantizeLinear", clipped, y_scale, y_zero_point)
+        dequantized = g.op("DequantizeLinear", quantized, y_scale, y_zero_point)
+        return dequantized
+
+    @staticmethod
+    def forward(ctx, input_, y_scale, y_zero_point, clip_input_low, clip_input_high):
         return input_
 
     @staticmethod

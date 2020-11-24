@@ -23,12 +23,12 @@
                 "mode": "symmetric",
                 "level_low": -128,
                 "level_high": 127,
-                "granularity": "perchannel"
+                "granularity": "pertensor"
             },
             "q8_w_asym": {
                 "bits": 8,
                 "mode": "asymmetric",
-                "granularity": "perchannel"
+                "granularity": "pertensor"
             }
         }
     },
@@ -43,7 +43,7 @@
         {
             "type": "DepthWiseConvolution",
             "quantization": {
-                "activations": "q8_a_ch",
+                "activations": "q8_a",
                 "weights": ["q8_w_sym", "q8_w_asym"]
             }
         },

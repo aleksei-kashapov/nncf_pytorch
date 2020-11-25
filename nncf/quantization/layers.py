@@ -313,33 +313,40 @@ class SymmetricQuantizer(BaseQuantizer):
             input_high = input_range
 
             if self._export_mode == QuantizerExportMode.ONNX_QUANTIZE_DEQUANTIZE_PAIRS:
-                scale = 1
                 if self.is_saturation_fix:
-                    # saturation issue fix
-                    scale = 2
-                y_scale, y_zero_point = get_scale_zp_from_input_low_input_high(scale * self.level_low,
-                                                                               scale * self.level_high,
-                                                                               scale * input_low,
-                                                                               scale * input_high)
-                if self.per_channel:
-                    if torch.allclose(y_scale - y_scale[0], torch.zeros_like(y_scale)) and torch.allclose(
-                            y_zero_point - y_zero_point[0], torch.zeros_like(y_zero_point)):
-                        y_scale, y_zero_point = y_scale[0], y_zero_point[0]
-                        # TODO:: do we need Clip?
-                        return ExportQuantizeToONNXQuantDequant.apply(x, y_scale, y_zero_point)
-                    raise RuntimeError("PyTorch v1.5.0 export to ONNX using QuantizeLinear-DequantizeLinear "
-                                       "doesn't support per channel quantization")
-                return ExportQuantizeToONNXQuantDequant.apply(x, y_scale, y_zero_point)
+                    y_scale, y_zero_point = get_scale_zp_from_input_low_input_high(2 * self.level_low,
+                                                                                   2 * self.level_high + 1,
+                                                                                   2 * input_low,
+                                                                                   127. / 63. * input_high)
+                else:
+                    y_scale, y_zero_point = get_scale_zp_from_input_low_input_high(self.level_low,
+                                                                                   self.level_high,
+                                                                                   input_low,
+                                                                                   input_high)
 
-            if self._export_mode == QuantizerExportMode.FAKE_QUANTIZE:
-                scale = 1
-                if self.is_saturation_fix:
-                    # saturation issue fix
-                    scale = 2
-                # TODO:: do we need Clip?
-                return ExportQuantizeToFakeQuantize.apply(x, scale * self.levels,
-                                                          scale * input_low, scale * input_high,
-                                                          scale * input_low, scale * input_high)
+        if self._export_mode == QuantizerExportMode.ONNX_QUANTIZE_DEQUANTIZE_PAIRS:
+            if self.per_channel:
+                if torch.allclose(y_scale - y_scale[0], torch.zeros_like(y_scale)) and torch.allclose(
+                        y_zero_point - y_zero_point[0], torch.zeros_like(y_zero_point)):
+                    y_scale, y_zero_point = y_scale[0], y_zero_point[0]
+                    # TODO:: do we need Clip?
+                    return ExportQuantizeToONNXQuantDequant.apply(x, y_scale, y_zero_point)
+                raise RuntimeError("PyTorch v1.5.0 export to ONNX using QuantizeLinear-DequantizeLinear "
+                                   "doesn't support per channel quantization")
+            return ExportQuantizeToONNXQuantDequant.apply(x, y_scale, y_zero_point)
+
+        if self._export_mode == QuantizerExportMode.FAKE_QUANTIZE:
+            # TODO:: do we need Clip?
+            scale_low = 1
+            scale_high = 1
+            if self.is_saturation_fix:
+                scale_low = 2
+                scale_high = 127. / 63.
+            return ExportQuantizeToFakeQuantize.apply(x, scale_low * self.levels,
+                                                      scale_low * input_low,
+                                                      scale_high * input_high,
+                                                      scale_low * input_low,
+                                                      scale_high * input_high)
         raise RuntimeError
 
 
@@ -418,31 +425,38 @@ class AsymmetricQuantizer(BaseQuantizer):
             input_high_tuned = input_low_tuned + input_range_tuned
 
             if self._export_mode == QuantizerExportMode.ONNX_QUANTIZE_DEQUANTIZE_PAIRS:
-                scale = 1
                 if self.is_saturation_fix:
-                    # saturation issue fix
-                    scale = 2
-                y_scale, y_zero_point = get_scale_zp_from_input_low_input_high(scale * self.level_low,
-                                                                               scale * self.level_high,
-                                                                               scale * input_low_tuned,
-                                                                               scale * input_high_tuned)
-                if self.per_channel:
-                    if torch.allclose(y_scale - y_scale[0], torch.zeros_like(y_scale)) and torch.allclose(
-                            y_zero_point - y_zero_point[0], torch.zeros_like(y_zero_point)):
-                        y_scale, y_zero_point = y_scale[0], y_zero_point[0]
-                        # TODO:: do we need Clip?
-                        return ExportQuantizeToONNXQuantDequant.apply(x, y_scale, y_zero_point)
-                    raise RuntimeError("PyTorch v1.5.0 export to ONNX using QuantizeLinear-DequantizeLinear "
-                                       "doesn't support per channel quantization")
-                return ExportQuantizeToONNXQuantDequant.apply(x, y_scale, y_zero_point)
+                    y_scale, y_zero_point = get_scale_zp_from_input_low_input_high(2 * self.level_low,
+                                                                                   2 * self.level_high + 1,
+                                                                                   2 * input_low_tuned,
+                                                                                   127. / 63. * input_high_tuned)
+                else:
+                    y_scale, y_zero_point = get_scale_zp_from_input_low_input_high(self.level_low,
+                                                                                   self.level_high,
+                                                                                   input_low_tuned,
+                                                                                   input_high_tuned)
 
-            if self._export_mode == QuantizerExportMode.FAKE_QUANTIZE:
-                scale = 1
-                if self.is_saturation_fix:
-                    # saturation issue fix
-                    scale = 2
-                # TODO:: do we need Clip?
-                return ExportQuantizeToFakeQuantize.apply(x, scale * self.levels,
-                                                          scale * input_low_tuned, scale * input_high_tuned,
-                                                          scale * input_low_tuned, scale * input_high_tuned)
+        if self._export_mode == QuantizerExportMode.ONNX_QUANTIZE_DEQUANTIZE_PAIRS:
+            if self.per_channel:
+                if torch.allclose(y_scale - y_scale[0], torch.zeros_like(y_scale)) and torch.allclose(
+                        y_zero_point - y_zero_point[0], torch.zeros_like(y_zero_point)):
+                    y_scale, y_zero_point = y_scale[0], y_zero_point[0]
+                    # TODO:: do we need Clip?
+                    return ExportQuantizeToONNXQuantDequant.apply(x, y_scale, y_zero_point)
+                raise RuntimeError("PyTorch v1.5.0 export to ONNX using QuantizeLinear-DequantizeLinear "
+                                   "doesn't support per channel quantization")
+            return ExportQuantizeToONNXQuantDequant.apply(x, y_scale, y_zero_point)
+
+        if self._export_mode == QuantizerExportMode.FAKE_QUANTIZE:
+            # TODO:: do we need Clip?
+            scale_low = 1
+            scale_high = 1
+            if self.is_saturation_fix:
+                scale_low = 2
+                scale_high = 127. / 63.
+            return ExportQuantizeToFakeQuantize.apply(x, scale_low * self.levels,
+                                                      scale_low * input_low_tuned,
+                                                      scale_high * input_high_tuned,
+                                                      scale_low * input_low_tuned,
+                                                      scale_high * input_high_tuned)
         raise RuntimeError

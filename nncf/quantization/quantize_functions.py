@@ -116,7 +116,7 @@ def _quantize_autograd_to_range(input_, input_low, input_high, levels):
     output = output * input_range / (levels - 1) + input_low
     return output
 
-
+# TODO: do we need Clip for fixing saturation issue
 class ExportQuantizeToFakeQuantizeWithClip(torch.autograd.Function):
     @staticmethod
     def symbolic(g, input_, levels, clip_input_low, clip_input_high,
@@ -150,7 +150,7 @@ class ExportQuantizeToFakeQuantize(torch.autograd.Function):
         # backward is not used during export
         return grad_output
 
-
+# TODO: do we need Clip for fixing saturation issue
 class ExportQuantizeToONNXQuantDequantWithClip(torch.autograd.Function):
     @staticmethod
     def symbolic(g, input_, y_scale, y_zero_point, clip_input_low, clip_input_high):
@@ -189,9 +189,8 @@ class ExportQuantizeToONNXQuantDequant(torch.autograd.Function):
 
 
 def get_scale_zp_from_input_low_input_high(level_low, level_high, input_low, input_high):
-    levels = level_high - level_low + 1
+    levels = level_high - level_low
     assert levels in [255, 256], "Can only export to INT8 256-level ONNX Quantize/Dequantize pairs"
-
     y_scale = (input_high - input_low) / (level_high - level_low)
     y_zero_point = (level_low * input_high - level_high * input_low) / (input_high - input_low)
 

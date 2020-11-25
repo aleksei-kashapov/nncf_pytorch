@@ -23,8 +23,7 @@ from nncf.debug import is_debug
 from nncf.functions import clamp
 from nncf.nncf_logger import logger as nncf_logger
 from .quantize_functions import symmetric_quantize, asymmetric_quantize, ExportQuantizeToFakeQuantize, \
-    ExportQuantizeToFakeQuantizeWithClip, get_scale_zp_from_input_low_input_high, ExportQuantizeToONNXQuantDequant, \
-    ExportQuantizeToONNXQuantDequantWithClip, TuneRange
+    get_scale_zp_from_input_low_input_high, ExportQuantizeToONNXQuantDequant, TuneRange
 from ..layer_utils import COMPRESSION_MODULES
 from ..registry import Registry
 from ..utils import get_per_channel_scale_shape, get_flat_tensor_contents_string, no_jit_trace, is_tracing_state
@@ -53,9 +52,6 @@ class QuantizerConfig:
         self.per_channel = per_channel
         self.is_weights = is_weights
         self.is_saturation_fix = is_saturation_fix
-        # Fine tune for lower bitwidth
-        if self.is_saturation_fix:
-            self.bits -= 1
         self.input_shape = input_shape
         self.logarithm_scale = logarithm_scale
 

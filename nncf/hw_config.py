@@ -41,6 +41,7 @@ class HWConfigType(Enum):
             return HWConfigType.VPU
         raise RuntimeError("Unknown HW config type string")
 
+
 HW_CONFIG_TYPE_TARGET_DEVICE_MAP = {
     'ANY': HWConfigType.CPU.value,
     'CPU': HWConfigType.CPU.value,
@@ -49,6 +50,7 @@ HW_CONFIG_TYPE_TARGET_DEVICE_MAP = {
     'GPU': HWConfigType.GPU.value,
     'TRIAL': None
 }
+
 
 def get_metatypes_by_hw_config_name(hw_config_name: HWConfigOpName) -> List['OperatorMetatype']:
     retval = []
@@ -162,13 +164,13 @@ class HWConfig(List):
                 true_level_low, true_level_high, _ = AsymmetricQuantizer.calculate_level_ranges(bits)
 
             assert quantization_subdict['level_low'] == true_level_low, \
-                    "Invalid value of quantizer parameter `level_low`.\
-                         The parameter must be consistent with other parameters!"
+                "Invalid value of quantizer parameter `level_low`.\
+                     The parameter must be consistent with other parameters!"
             assert quantization_subdict['level_high'] == true_level_high, \
-                    "Invalid value of quantizer parameter `level_high`.\
-                         The parameter must be consistent with other parameters!"
-
-
+                "Invalid value of quantizer parameter `level_high`.\
+                     The parameter must be consistent with other parameters!"
+        if is_saturation_fix:
+            bits -= 1
         return QuantizerConfig(bits=bits,
                                mode=mode,
                                per_channel=is_per_channel,
@@ -201,13 +203,6 @@ class HWConfig(List):
 
             if self.QUANTIZATION_ALGORITHM_NAME in op_dict:
                 allowed_qconfs = op_dict[self.QUANTIZATION_ALGORITHM_NAME][config_key]
-                # if for_weights:
-                #     if self.target_device == 'CPU':
-                #         for conf in allowed_qconfs:
-                #             conf['bits'] = 7
-                #             if conf['mode'] == 'symmetric':
-                #                 conf['level_low'] = -64
-                #                 conf['level_high'] = 63
 
             else:
                 allowed_qconfs = []
@@ -215,7 +210,6 @@ class HWConfig(List):
             is_saturation_fix = False
             if self.target_device == "CPU" and for_weights:
                 is_saturation_fix = True
-
 
             qconf_list_with_possible_duplicates = []
             for hw_config_qconf_dict in allowed_qconfs:

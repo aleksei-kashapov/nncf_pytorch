@@ -116,25 +116,6 @@ def _quantize_autograd_to_range(input_, input_low, input_high, levels):
     output = output * input_range / (levels - 1) + input_low
     return output
 
-# TODO: do we need Clip for fixing saturation issue
-class ExportQuantizeToFakeQuantizeWithClip(torch.autograd.Function):
-    @staticmethod
-    def symbolic(g, input_, levels, clip_input_low, clip_input_high,
-                 input_low, input_high, output_low, output_high):
-        clip_input_low = _parse_arg(clip_input_low, 'f')
-        clip_input_high = _parse_arg(clip_input_high, 'f')
-        clipped = g.op("Clip", input_, max_f=clip_input_high, min_f=clip_input_low)
-        return g.op("FakeQuantize", clipped, input_low, input_high, output_low, output_high, levels_i=levels)
-
-    @staticmethod
-    def forward(ctx, input_, levels, clip_input_low, clip_input_high, input_low, input_high, output_low, output_high):
-        return input_
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        # backward is not used during export
-        return grad_output
-
 
 class ExportQuantizeToFakeQuantize(torch.autograd.Function):
     @staticmethod
@@ -143,26 +124,6 @@ class ExportQuantizeToFakeQuantize(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, input_, levels, input_low, input_high, output_low, output_high):
-        return input_
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        # backward is not used during export
-        return grad_output
-
-# TODO: do we need Clip for fixing saturation issue
-class ExportQuantizeToONNXQuantDequantWithClip(torch.autograd.Function):
-    @staticmethod
-    def symbolic(g, input_, y_scale, y_zero_point, clip_input_low, clip_input_high):
-        clip_input_low = _parse_arg(clip_input_low, 'f')
-        clip_input_high = _parse_arg(clip_input_high, 'f')
-        clipped = g.op("Clip", input_, max_f=clip_input_high, min_f=clip_input_low)
-        quantized = g.op("QuantizeLinear", clipped, y_scale, y_zero_point)
-        dequantized = g.op("DequantizeLinear", quantized, y_scale, y_zero_point)
-        return dequantized
-
-    @staticmethod
-    def forward(ctx, input_, y_scale, y_zero_point, clip_input_low, clip_input_high):
         return input_
 
     @staticmethod

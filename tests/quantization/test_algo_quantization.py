@@ -63,6 +63,9 @@ def test_quantization_configs__with_defaults():
     for aq_info in activation_quantizer_infos.values():
         compare_qconfigs(ref_activation_qconfig, aq_info.quantizer_module_ref)
 
+
+def test_quantization_configs__with_defaults_cpu_vnni():
+    model = BasicConvTestModel()
     config = get_quantization_config_without_range_init_cpu_vnni()
     _, compression_ctrl = create_compressed_model_and_algo_for_test(model, config)
 
@@ -77,6 +80,7 @@ def test_quantization_configs__with_defaults():
     ref_activation_qconfig = QuantizerConfig(8, QuantizationMode.SYMMETRIC, None, False, None, False)
     for aq_info in activation_quantizer_infos.values():
         compare_qconfigs(ref_activation_qconfig, aq_info.quantizer_module_ref)
+
 
 def test_quantization_configs__custom():
     model = BasicConvTestModel()
@@ -225,6 +229,7 @@ def test_get_weight_activation_pairs__with_extra_module():
                        'ReLU[relu]/RELU_0')]
 
     compare_weights_activation_quantizers_pairs(actual_pairs, algo, ref_pair_names, model_name)
+
 
 def test_can_load_quant_algo__with_defaults():
     model = BasicConvTestModel()
@@ -468,8 +473,8 @@ def test_quantize_inputs():
         '/nncf_model_input_3',
         '/nncf_model_input_4'
     ]
-    actual_input_quantizer_str_scopes =\
-         [str_scope for str_scope in model.activation_quantizers if 'nncf_model_input' in str_scope]
+    actual_input_quantizer_str_scopes = \
+        [str_scope for str_scope in model.activation_quantizers if 'nncf_model_input' in str_scope]
     assert len(REF_QUANTIZED_INPUT_MODULE_SCOPES) == len(actual_input_quantizer_str_scopes)
     for ref_qinput_scope_str in REF_QUANTIZED_INPUT_MODULE_SCOPES:
         assert isinstance(model.activation_quantizers[ref_qinput_scope_str], SymmetricQuantizer)

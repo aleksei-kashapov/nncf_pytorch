@@ -109,6 +109,15 @@ The quantization configuration in the `"target_device": "TRIAL"` case may be ove
 
 For all target HW types, parts of the model graph can be marked as non-quantizable by using the `"ignored_scopes"` field - inputs and weights of matching nodes in the NNCF internal graph representation will not be quantized, and the downstream quantizers will not propagate upwards through such nodes.
 
+---
+**NOTE**
+
+There is a known issue with AVX2 and AVX512 CPU devices. The issue appears with 8-bit matrix calculations with tensors that are close to the maximum or saturated value.
+
+To fix this issue inside NNCF, weight tensors are quantized in 8 bits but only 7 bits are effectively used. 
+This regime is used when `"target_device": "CPU"`. If you use CPU with VNNI instructions we recommend to set `"target_device": "CPU_VNNI"`, in which all tensors are quantized in 8 bits by default.
+
+---
 
 #### Quantization Implementation
 

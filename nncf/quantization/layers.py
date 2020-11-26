@@ -246,7 +246,8 @@ class SymmetricQuantizer(BaseQuantizer):
         self.scale.requires_grad = False
 
     def set_level_ranges(self):
-        self.level_low, self.level_high, self.levels = self.calculate_level_ranges(self.num_bits,
+        scale = 1 if self.is_saturation_fix else 0
+        self.level_low, self.level_high, self.levels = self.calculate_level_ranges(self.num_bits - scale,
                                                                                    self.signed)
 
     @staticmethod
@@ -375,7 +376,8 @@ class AsymmetricQuantizer(BaseQuantizer):
         return True
 
     def set_level_ranges(self):
-        self.level_low, self.level_high, self.levels = self.calculate_level_ranges(self.num_bits)
+        scale = 1 if self.is_saturation_fix else 0
+        self.level_low, self.level_high, self.levels = self.calculate_level_ranges(self.num_bits - scale)
 
     @staticmethod
     def calculate_level_ranges(num_bits):

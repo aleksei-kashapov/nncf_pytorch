@@ -169,8 +169,6 @@ class HWConfig(List):
             assert quantization_subdict['level_high'] == true_level_high, \
                 "Invalid value of quantizer parameter `level_high`.\
                      The parameter must be consistent with other parameters!"
-        if is_saturation_fix:
-            bits -= 1
         return QuantizerConfig(bits=bits,
                                mode=mode,
                                per_channel=is_per_channel,

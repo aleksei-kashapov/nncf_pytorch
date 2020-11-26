@@ -11,7 +11,6 @@
  limitations under the License.
 """
 import torch
-from torch.onnx.symbolic_helper import _parse_arg
 import warnings
 
 from nncf.utils import add_domain

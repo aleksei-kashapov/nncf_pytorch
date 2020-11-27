@@ -194,7 +194,53 @@ class BaseQuantizer(nn.Module):
         self._export_mode = mode
 
     def run_export_quantization(self, x: torch.Tensor):
-        raise NotImplementedError
+        with no_jit_trace():
+            if isinstance(self, SymmetricQuantizer):
+                input_range = abs(self.scale) + self.eps
+                input_low = input_range * self.level_low / self.level_high
+                input_high = input_range
+            elif isinstance(self, AsymmetricQuantizer):
+                input_range_safe = abs(self.input_range) + self.eps
+                input_low, input_range_tuned = TuneRange.apply(self.input_low, input_range_safe, self.levels)
+                input_high = input_low + input_range_tuned
+            else:
+                raise NotImplementedError
+
+            level_low = self.level_low
+            level_high = self.level_high
+            levels = self.levels
+            if self.is_saturation_fix:
+                level_low *= 2
+                level_high = 2 * level_high + 1
+                levels = level_high - level_low + 1
+                input_low *= level_low / self.level_low
+                input_high *= level_high / self.level_high
+
+            if self._export_mode == QuantizerExportMode.ONNX_QUANTIZE_DEQUANTIZE_PAIRS:
+                y_scale, y_zero_point = get_scale_zp_from_input_low_input_high(level_low,
+                                                                               level_high,
+                                                                               input_low,
+                                                                               input_high)
+
+        if self._export_mode == QuantizerExportMode.ONNX_QUANTIZE_DEQUANTIZE_PAIRS:
+            if self.per_channel:
+                if torch.allclose(y_scale - y_scale[0], torch.zeros_like(y_scale)) and torch.allclose(
+                        y_zero_point - y_zero_point[0], torch.zeros_like(y_zero_point)):
+                    y_scale, y_zero_point = y_scale[0], y_zero_point[0]
+                    # TODO:: do we need Clip?
+                    return ExportQuantizeToONNXQuantDequant.apply(x, y_scale, y_zero_point)
+                raise RuntimeError("PyTorch v1.5.0 export to ONNX using QuantizeLinear-DequantizeLinear "
+                                   "doesn't support per channel quantization")
+            return ExportQuantizeToONNXQuantDequant.apply(x, y_scale, y_zero_point)
+
+        if self._export_mode == QuantizerExportMode.FAKE_QUANTIZE:
+            # TODO:: do we need Clip?
+            return ExportQuantizeToFakeQuantize.apply(x, levels,
+                                                      input_low,
+                                                      input_high,
+                                                      input_low,
+                                                      input_high)
+        raise RuntimeError('Unknown export mode')
 
 
 class QuantizersSwitcher:
@@ -302,50 +348,6 @@ class SymmetricQuantizer(BaseQuantizer):
         distributed.broadcast(self.scale, src=src)
         distributed.broadcast(self.signed_tensor, src=src)
 
-    def run_export_quantization(self, x: torch.Tensor):
-        with no_jit_trace():
-            input_range = abs(self.scale) + self.eps
-            # todo: take bias into account during input_low/input_high calculation
-            input_low = input_range * self.level_low / self.level_high
-            input_high = input_range
-
-            if self.is_saturation_fix:
-                level_low = 2 * self.level_low
-                level_high = 2 * self.level_high + 1
-                levels = level_high - level_low + 1
-                input_low *= level_low / self.level_low
-                input_high *= level_high / self.level_high
-            else:
-                level_low = self.level_low
-                level_high = self.level_high
-                levels = self.levels
-
-            if self._export_mode == QuantizerExportMode.ONNX_QUANTIZE_DEQUANTIZE_PAIRS:
-                y_scale, y_zero_point = get_scale_zp_from_input_low_input_high(level_low,
-                                                                               level_high,
-                                                                               input_low,
-                                                                               input_high)
-
-        if self._export_mode == QuantizerExportMode.ONNX_QUANTIZE_DEQUANTIZE_PAIRS:
-            if self.per_channel:
-                if torch.allclose(y_scale - y_scale[0], torch.zeros_like(y_scale)) and torch.allclose(
-                        y_zero_point - y_zero_point[0], torch.zeros_like(y_zero_point)):
-                    y_scale, y_zero_point = y_scale[0], y_zero_point[0]
-                    # TODO:: do we need Clip?
-                    return ExportQuantizeToONNXQuantDequant.apply(x, y_scale, y_zero_point)
-                raise RuntimeError("PyTorch v1.5.0 export to ONNX using QuantizeLinear-DequantizeLinear "
-                                   "doesn't support per channel quantization")
-            return ExportQuantizeToONNXQuantDequant.apply(x, y_scale, y_zero_point)
-
-        if self._export_mode == QuantizerExportMode.FAKE_QUANTIZE:
-            # TODO:: do we need Clip?
-            return ExportQuantizeToFakeQuantize.apply(x, levels,
-                                                      input_low,
-                                                      input_high,
-                                                      input_low,
-                                                      input_high)
-        raise RuntimeError
-
 
 @COMPRESSION_MODULES.register()
 @QUANTIZATION_MODULES.register(QuantizationMode.ASYMMETRIC)
@@ -415,46 +417,3 @@ class AsymmetricQuantizer(BaseQuantizer):
         super().broadcast_initialized_params(src)
         distributed.broadcast(self.input_low, src)
         distributed.broadcast(self.input_range, src)
-
-    def run_export_quantization(self, x: torch.Tensor):
-        with no_jit_trace():
-            input_range_safe = abs(self.input_range) + self.eps
-            input_low_tuned, input_range_tuned = TuneRange.apply(self.input_low, input_range_safe, self.levels)
-            input_high_tuned = input_low_tuned + input_range_tuned
-
-            if self.is_saturation_fix:
-                level_low = 2 * self.level_low
-                level_high = 2 * self.level_high + 1
-                levels = level_high - level_low + 1
-                input_low_tuned *= level_low / self.level_low
-                input_high_tuned *= level_high / self.level_high
-            else:
-                level_low = self.level_low
-                level_high = self.level_high
-                levels = self.levels
-
-            if self._export_mode == QuantizerExportMode.ONNX_QUANTIZE_DEQUANTIZE_PAIRS:
-                y_scale, y_zero_point = get_scale_zp_from_input_low_input_high(level_low,
-                                                                               level_high,
-                                                                               input_low_tuned,
-                                                                               input_high_tuned)
-
-        if self._export_mode == QuantizerExportMode.ONNX_QUANTIZE_DEQUANTIZE_PAIRS:
-            if self.per_channel:
-                if torch.allclose(y_scale - y_scale[0], torch.zeros_like(y_scale)) and torch.allclose(
-                        y_zero_point - y_zero_point[0], torch.zeros_like(y_zero_point)):
-                    y_scale, y_zero_point = y_scale[0], y_zero_point[0]
-                    # TODO:: do we need Clip?
-                    return ExportQuantizeToONNXQuantDequant.apply(x, y_scale, y_zero_point)
-                raise RuntimeError("PyTorch v1.5.0 export to ONNX using QuantizeLinear-DequantizeLinear "
-                                   "doesn't support per channel quantization")
-            return ExportQuantizeToONNXQuantDequant.apply(x, y_scale, y_zero_point)
-
-        if self._export_mode == QuantizerExportMode.FAKE_QUANTIZE:
-            # TODO:: do we need Clip?
-            return ExportQuantizeToFakeQuantize.apply(x, levels,
-                                                      input_low_tuned,
-                                                      input_high_tuned,
-                                                      input_low_tuned,
-                                                      input_high_tuned)
-        raise RuntimeError

@@ -112,10 +112,12 @@ For all target HW types, parts of the model graph can be marked as non-quantizab
 ---
 **NOTE**
 
-There is a known issue with AVX2 and AVX512 CPU devices. The issue appears with 8-bit matrix calculations with tensors that are close to the maximum or saturated value.
+There is a known issue with AVX2 and AVX512 CPU devices. The issue appears with 8-bit matrix calculations with tensors which elements are close to the maximum or saturated.
+AVX2 and AVX512 utilize a 16-bit register to store the result of operations on tensors. In case when tensors are saturated the buffer overflow happens.
+This leads to accuracy degradation.
 
 To fix this issue inside NNCF, weight tensors are quantized in 8 bits but only 7 bits are effectively used. 
-This regime is used when `"target_device": "CPU"`. If you use CPU with VNNI instructions we recommend to set `"target_device": "CPU_VNNI"`, in which all tensors are quantized in 8 bits by default.
+This regime is used when `"target_device": "CPU"` set. As this problem doesn't appear on CPU with VNNI instructions we recommend to set `"target_device": "CPU_VNNI"`, in which all tensors are quantized in 8 bits by default to achieve the maximum accuracy
 
 ---
 

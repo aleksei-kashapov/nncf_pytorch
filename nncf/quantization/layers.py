@@ -309,17 +309,22 @@ class SymmetricQuantizer(BaseQuantizer):
             input_low = input_range * self.level_low / self.level_high
             input_high = input_range
 
+            if self.is_saturation_fix:
+                level_low = 2 * self.level_low
+                level_high = 2 * self.level_high + 1
+                levels = level_high - level_low + 1
+                input_low *= level_low / self.level_low
+                input_high *= level_high / self.level_high
+            else:
+                level_low = self.level_low
+                level_high = self.level_high
+                levels = self.levels
+
             if self._export_mode == QuantizerExportMode.ONNX_QUANTIZE_DEQUANTIZE_PAIRS:
-                if self.is_saturation_fix:
-                    y_scale, y_zero_point = get_scale_zp_from_input_low_input_high(2 * self.level_low,
-                                                                                   2 * self.level_high + 1,
-                                                                                   2 * input_low,
-                                                                                   127. / 63. * input_high)
-                else:
-                    y_scale, y_zero_point = get_scale_zp_from_input_low_input_high(self.level_low,
-                                                                                   self.level_high,
-                                                                                   input_low,
-                                                                                   input_high)
+                y_scale, y_zero_point = get_scale_zp_from_input_low_input_high(level_low,
+                                                                               level_high,
+                                                                               input_low,
+                                                                               input_high)
 
         if self._export_mode == QuantizerExportMode.ONNX_QUANTIZE_DEQUANTIZE_PAIRS:
             if self.per_channel:
@@ -334,16 +339,11 @@ class SymmetricQuantizer(BaseQuantizer):
 
         if self._export_mode == QuantizerExportMode.FAKE_QUANTIZE:
             # TODO:: do we need Clip?
-            scale_low = 1
-            scale_high = 1
-            if self.is_saturation_fix:
-                scale_low = 2
-                scale_high = 127. / 63.
-            return ExportQuantizeToFakeQuantize.apply(x, scale_low * self.levels,
-                                                      scale_low * input_low,
-                                                      scale_high * input_high,
-                                                      scale_low * input_low,
-                                                      scale_high * input_high)
+            return ExportQuantizeToFakeQuantize.apply(x, levels,
+                                                      input_low,
+                                                      input_high,
+                                                      input_low,
+                                                      input_high)
         raise RuntimeError
 
 
@@ -422,17 +422,22 @@ class AsymmetricQuantizer(BaseQuantizer):
             input_low_tuned, input_range_tuned = TuneRange.apply(self.input_low, input_range_safe, self.levels)
             input_high_tuned = input_low_tuned + input_range_tuned
 
+            if self.is_saturation_fix:
+                level_low = 2 * self.level_low
+                level_high = 2 * self.level_high + 1
+                levels = level_high - level_low + 1
+                input_low_tuned *= level_low / self.level_low
+                input_high_tuned *= level_high / self.level_high
+            else:
+                level_low = self.level_low
+                level_high = self.level_high
+                levels = self.levels
+
             if self._export_mode == QuantizerExportMode.ONNX_QUANTIZE_DEQUANTIZE_PAIRS:
-                if self.is_saturation_fix:
-                    y_scale, y_zero_point = get_scale_zp_from_input_low_input_high(2 * self.level_low,
-                                                                                   2 * self.level_high + 1,
-                                                                                   2 * input_low_tuned,
-                                                                                   127. / 63. * input_high_tuned)
-                else:
-                    y_scale, y_zero_point = get_scale_zp_from_input_low_input_high(self.level_low,
-                                                                                   self.level_high,
-                                                                                   input_low_tuned,
-                                                                                   input_high_tuned)
+                y_scale, y_zero_point = get_scale_zp_from_input_low_input_high(level_low,
+                                                                               level_high,
+                                                                               input_low_tuned,
+                                                                               input_high_tuned)
 
         if self._export_mode == QuantizerExportMode.ONNX_QUANTIZE_DEQUANTIZE_PAIRS:
             if self.per_channel:
@@ -447,14 +452,9 @@ class AsymmetricQuantizer(BaseQuantizer):
 
         if self._export_mode == QuantizerExportMode.FAKE_QUANTIZE:
             # TODO:: do we need Clip?
-            scale_low = 1
-            scale_high = 1
-            if self.is_saturation_fix:
-                scale_low = 2
-                scale_high = 127. / 63.
-            return ExportQuantizeToFakeQuantize.apply(x, scale_low * self.levels,
-                                                      scale_low * input_low_tuned,
-                                                      scale_high * input_high_tuned,
-                                                      scale_low * input_low_tuned,
-                                                      scale_high * input_high_tuned)
+            return ExportQuantizeToFakeQuantize.apply(x, levels,
+                                                      input_low_tuned,
+                                                      input_high_tuned,
+                                                      input_low_tuned,
+                                                      input_high_tuned)
         raise RuntimeError

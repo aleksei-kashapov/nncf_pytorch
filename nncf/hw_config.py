@@ -205,12 +205,11 @@ class HWConfig(List):
             else:
                 allowed_qconfs = []
 
-            is_saturation_fix = False
-            if self.target_device == "CPU" and for_weights:
-                is_saturation_fix = True
-
             qconf_list_with_possible_duplicates = []
             for hw_config_qconf_dict in allowed_qconfs:
+                is_saturation_fix = False
+                if self.target_device == "CPU" and for_weights and hw_config_qconf_dict['bits'] == 8:
+                    is_saturation_fix = True
                 qconf_list_with_possible_duplicates.append(
                     self.get_qconf_from_hw_config_subdict(hw_config_qconf_dict, for_weights, is_saturation_fix))
 

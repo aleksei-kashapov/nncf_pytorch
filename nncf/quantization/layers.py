@@ -193,19 +193,12 @@ class BaseQuantizer(nn.Module):
     def set_export_mode(self, mode: QuantizerExportMode):
         self._export_mode = mode
 
+    def _get_input_low_input_high(self):
+        raise NotImplementedError
+
     def run_export_quantization(self, x: torch.Tensor):
         with no_jit_trace():
-            if isinstance(self, SymmetricQuantizer):
-                input_range = abs(self.scale) + self.eps
-                input_low = input_range * self.level_low / self.level_high
-                input_high = input_range
-            elif isinstance(self, AsymmetricQuantizer):
-                input_range_safe = abs(self.input_range) + self.eps
-                input_low, input_range_tuned = TuneRange.apply(self.input_low, input_range_safe, self.levels)
-                input_high = input_low + input_range_tuned
-            else:
-                raise NotImplementedError
-
+            input_low, input_high = self._get_input_low_input_high()
             level_low = self.level_low
             level_high = self.level_high
             levels = self.levels
@@ -348,6 +341,12 @@ class SymmetricQuantizer(BaseQuantizer):
         distributed.broadcast(self.scale, src=src)
         distributed.broadcast(self.signed_tensor, src=src)
 
+    def _get_input_low_input_high(self):
+        input_range = abs(self.scale) + self.eps
+        input_low = input_range * self.level_low / self.level_high
+        input_high = input_range
+        return input_low, input_high
+
 
 @COMPRESSION_MODULES.register()
 @QUANTIZATION_MODULES.register(QuantizationMode.ASYMMETRIC)
@@ -417,3 +416,9 @@ class AsymmetricQuantizer(BaseQuantizer):
         super().broadcast_initialized_params(src)
         distributed.broadcast(self.input_low, src)
         distributed.broadcast(self.input_range, src)
+
+    def _get_input_low_input_high(self):
+        input_range_safe = abs(self.input_range) + self.eps
+        input_low, input_range_tuned = TuneRange.apply(self.input_low, input_range_safe, self.levels)
+        input_high = input_low + input_range_tuned
+        return input_low, input_high

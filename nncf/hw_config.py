@@ -45,7 +45,6 @@ class HWConfigType(Enum):
 HW_CONFIG_TYPE_TARGET_DEVICE_MAP = {
     'ANY': HWConfigType.CPU.value,
     'CPU': HWConfigType.CPU.value,
-    'CPU_VNNI': HWConfigType.CPU.value,
     'VPU': HWConfigType.VPU.value,
     'GPU': HWConfigType.GPU.value,
     'TRIAL': None

@@ -33,7 +33,7 @@ from nncf.quantization.layers import QuantizationMode, QuantizerConfig, Symmetri
     QUANTIZATION_MODULES
 from nncf.utils import get_all_modules_by_type
 from tests.quantization.test_quantization_helpers import get_quantization_config_without_range_init, \
-    get_quantization_config_without_range_init_cpu_vnni, get_squeezenet_quantization_config
+    get_squeezenet_quantization_config
 from tests.helpers import BasicConvTestModel, TwoConvTestModel, get_empty_config, \
     create_compressed_model_and_algo_for_test, create_conv
 
@@ -49,24 +49,6 @@ def compare_qconfigs(config: QuantizerConfig, quantizer: BaseQuantizer):
 def test_quantization_configs__with_defaults():
     model = BasicConvTestModel()
     config = get_quantization_config_without_range_init()
-    _, compression_ctrl = create_compressed_model_and_algo_for_test(model, config)
-
-    assert isinstance(compression_ctrl, QuantizationController)
-    weight_quantizers = compression_ctrl.weight_quantizers
-    activation_quantizer_infos = compression_ctrl.non_weight_quantizers
-
-    ref_weight_qconfig = QuantizerConfig(8, QuantizationMode.SYMMETRIC, True, True, None, True)
-    for wq in weight_quantizers.values():
-        compare_qconfigs(ref_weight_qconfig, wq)
-
-    ref_activation_qconfig = QuantizerConfig(8, QuantizationMode.SYMMETRIC, None, False, None, False)
-    for aq_info in activation_quantizer_infos.values():
-        compare_qconfigs(ref_activation_qconfig, aq_info.quantizer_module_ref)
-
-
-def test_quantization_configs__with_defaults_cpu_vnni():
-    model = BasicConvTestModel()
-    config = get_quantization_config_without_range_init_cpu_vnni()
     _, compression_ctrl = create_compressed_model_and_algo_for_test(model, config)
 
     assert isinstance(compression_ctrl, QuantizationController)

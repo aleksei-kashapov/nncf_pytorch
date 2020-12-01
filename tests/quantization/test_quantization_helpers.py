@@ -67,28 +67,6 @@ def get_quantization_config_without_range_init(model_size=4):
     })
     return config
 
-def get_quantization_config_without_range_init_cpu_vnni(model_size=4):
-    config = NNCFConfig()
-    config.update({
-        "model": "basic_quant_conv",
-        "model_size": model_size,
-        "input_info":
-            {
-                "sample_size": [1, 1, model_size, model_size],
-            },
-        "target_device": "CPU_VNNI",
-        "compression":
-            {
-                "algorithm": "quantization",
-                "initializer": {
-                    "range": {
-                        "num_init_steps": 0
-                    }
-                }
-            }
-    })
-    return config
-
 
 def get_squeezenet_quantization_config(image_size=32, batch_size=3):
     config = get_quantization_config_without_range_init(image_size)

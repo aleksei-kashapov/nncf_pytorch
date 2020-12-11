@@ -44,7 +44,7 @@ class QuantizerConfig:
                  per_channel=False,
                  input_shape=None,
                  is_weights=False,
-                 logarithm_scale=False):
+                 logarithm_scale=False,
                  is_saturation_fix=False):
         self.bits = bits
         self.mode = mode
@@ -432,6 +432,7 @@ class SymmetricQuantizer(BaseQuantizer):
 class AsymmetricQuantizer(BaseQuantizer):
     INPUT_LOW_PARAM_NAME = 'input_low'
     INPUT_RANGE_PARAM_NAME = 'input_range'
+    _INPUT_RANGE_PARAM_STORAGE_ATTR = '_input_range_param_storage'
 
     def __init__(self, config):
         super().__init__(config)

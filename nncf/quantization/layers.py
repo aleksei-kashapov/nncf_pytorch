@@ -23,7 +23,8 @@ from nncf.debug import is_debug
 from nncf.functions import clamp
 from nncf.nncf_logger import logger as nncf_logger
 from .quantize_functions import symmetric_quantize, asymmetric_quantize, ExportQuantizeToFakeQuantize, \
-    get_scale_zp_from_input_low_input_high, ExportQuantizeToONNXQuantDequant, TuneRange
+    ExportQuantizeToFakeQuantizeWithClip, get_scale_zp_from_input_low_input_high, ExportQuantizeToONNXQuantDequant, \
+    TuneRange
 from ..layer_utils import COMPRESSION_MODULES
 from ..registry import Registry
 from ..utils import get_per_channel_scale_shape, get_flat_tensor_contents_string, no_jit_trace, is_tracing_state
@@ -235,6 +236,13 @@ class BaseQuantizer(nn.Module):
 
         if self._export_mode == QuantizerExportMode.FAKE_QUANTIZE:
             # TODO:: do we need Clip?
+            # return ExportQuantizeToFakeQuantizeWithClip.apply(x, levels,
+            #                                                   input_low,
+            #                                                   input_high,
+            #                                                   input_low,
+            #                                                   input_high,
+            #                                                   input_low,
+            #                                                   input_high)
             return ExportQuantizeToFakeQuantize.apply(x, levels,
                                                       input_low,
                                                       input_high,

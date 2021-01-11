@@ -13,6 +13,7 @@
 import torch
 import warnings
 
+from torch.onnx.symbolic_helper import _parse_arg
 from nncf.utils import add_domain
 
 from .extensions import QuantizedFunctionsCPU, QuantizedFunctionsCUDA
@@ -123,6 +124,25 @@ class ExportQuantizeToFakeQuantize(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, input_, levels, input_low, input_high, output_low, output_high):
+        return input_
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        # backward is not used during export
+        return grad_output
+
+
+class ExportQuantizeToFakeQuantizeWithClip(torch.autograd.Function):
+    @staticmethod
+    def symbolic(g, input_, levels, clip_input_low, clip_input_high,
+                 input_low, input_high, output_low, output_high):
+        clip_input_low = _parse_arg(clip_input_low, 'f')
+        clip_input_high = _parse_arg(clip_input_high, 'f')
+        clipped = g.op("Clip", input_, max_f=clip_input_high, min_f=clip_input_low)
+        return g.op("FakeQuantize", clipped, input_low, input_high, output_low, output_high, levels_i=levels)
+
+    @staticmethod
+    def forward(ctx, input_, levels, clip_input_low, clip_input_high, input_low, input_high, output_low, output_high):
         return input_
 
     @staticmethod

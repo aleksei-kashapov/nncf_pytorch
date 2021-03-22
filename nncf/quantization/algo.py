@@ -111,7 +111,6 @@ from nncf.tensor_statistics.statistics import MinMaxTensorStatistic
 from nncf.tensor_statistics.statistics import TensorStatistic
 from nncf.utils import get_scale_shape
 from nncf.utils import in_scope_list
-from nncf.utils import is_main_process
 from nncf.utils import should_consider_scope
 
 
@@ -1086,7 +1085,7 @@ class QuantizationController(QuantizationControllerBase):
         params = quantization_config.get('params', None)
         self.is_staged_scheduler = bool(params)
 
-        if is_main_process() and should_init:
+        if should_init:
             self.run_batchnorm_adaptation(self.quantization_config)
 
         # Staged scheduler must be created after initialized to prevent extra logic with disabled quantizations

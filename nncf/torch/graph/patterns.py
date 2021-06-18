@@ -13,58 +13,27 @@
 
 from nncf.common.graph.patterns import GraphPattern
 from nncf.common.graph.patterns import create_graph_pattern_from_pattern_view
-
+import networkx as nx
 
 class PatternFactory:
     def __init__(self):
         self.graph_full_pattern = None
         self.pattern_views = None
 
-    def get_full_pattern_graph(self, pattern_views=None):
-        if self.graph_full_pattern is not None and self.pattern_views == pattern_views:
+    def get_full_pattern_graph(self, pattern_graph_path=None):
+        if self.graph_full_pattern is not None:
             return self.graph_full_pattern
-        self.pattern_views = pattern_views
-        self.graph_full_pattern = get_full_pattern_graph(pattern_views)
+        path = '/home/aleksei/tmp/pattern.dot'
+        self.graph_full_pattern = get_full_pattern_graph(path)
         return self.graph_full_pattern
 
 
-def get_full_pattern_graph(pattern_views=None):
-    # Basic Types
-    LINEAR_OPS_type = ['linear', 'conv2d', 'conv_transpose2d', 'conv3d',
-                       'conv_transpose3d', 'conv1d', 'addmm']
-    BN_type = ['batch_norm', 'batch_norm3d']
-    # This type may be useful in the future
-    # pylint: disable=unused-variable
-    POOLING_type = ['adaptive_avg_pool2d', 'adaptive_avg_pool3d', 'avg_pool2d', 'avg_pool3d']
-    RELU_type = ['RELU', 'hardtanh']
-    NON_RELU_ACTIVATIONS_type = ['elu', 'elu_', 'prelu', 'sigmoid', 'gelu']
-    ARITHMETIC_type = ['__iadd__', '__add__', '__mul__', '__rmul__']
+def get_full_pattern_graph(dot_file_path):
+    pattern_graph = nx.drawing.nx_agraph.read_dot(dot_file_path)
+    GP = GraphPattern()
+    GP.graph = pattern_graph
 
-    # Basic Graph Patterns
-    LINEAR_OPS = GraphPattern(LINEAR_OPS_type)
-
-    BN = GraphPattern(BN_type)
-
-    ACTIVATIONS = GraphPattern(RELU_type + NON_RELU_ACTIVATIONS_type)
-
-    ARITHMETIC = GraphPattern(ARITHMETIC_type)
-
-    ANY_BN_ACT_COMBO = BN + ACTIVATIONS | ACTIVATIONS + BN | BN | ACTIVATIONS
-
-    # Linear Types United with Swish Activation
-    MUL = GraphPattern('__mul__')
-    SIGMOID = GraphPattern('sigmoid')
-    LINEAR_OPS_SWISH_ACTIVATION = (LINEAR_OPS + SIGMOID) * MUL | LINEAR_OPS + (BN + SIGMOID) * MUL
-
-    FULL_PATTERN_GRAPH = LINEAR_OPS + ANY_BN_ACT_COMBO | ANY_BN_ACT_COMBO | \
-                         ARITHMETIC + ANY_BN_ACT_COMBO | LINEAR_OPS_SWISH_ACTIVATION
-
-    if pattern_views is not None:
-        for pattern_view in pattern_views:
-            graph_pattern = create_graph_pattern_from_pattern_view(pattern_view)
-            FULL_PATTERN_GRAPH = FULL_PATTERN_GRAPH | graph_pattern
-
-    return FULL_PATTERN_GRAPH
+    return GP
 
 
 PATTERN_FACTORY = PatternFactory()

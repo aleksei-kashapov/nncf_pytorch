@@ -117,6 +117,10 @@ class GraphPattern:
     def graph(self):
         return self._graph
 
+    @graph.setter
+    def graph(self, graph: nx.DiGraph):
+        self._graph = graph
+
     def add_node(self, t: List[str]) -> int:
         self.graph.add_node(GraphPattern.NODE_COUNTER, type=t)
         GraphPattern.NODE_COUNTER += 1

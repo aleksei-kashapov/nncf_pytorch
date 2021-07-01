@@ -30,7 +30,7 @@ from nncf.torch.utils import is_dist_avail_and_initialized
 from nncf.torch.algo_selector import COMPRESSION_ALGORITHMS
 
 from nncf.common.utils.logger import logger
-from nncf.config.utils import is_accuracy_aware_training
+from nncf.config.utils import is_nncf_training
 from nncf.config.structures import ModelEvaluationArgs
 
 
@@ -114,7 +114,7 @@ def create_compressed_model(model: Module, config: NNCFConfig,
     target_scopes = config.get('target_scopes')
 
     original_model_accuracy = None
-    if is_accuracy_aware_training(config):
+    if is_nncf_training(config):
         if config.has_extra_struct(ModelEvaluationArgs):
             evaluation_args = config.get_extra_struct(ModelEvaluationArgs)
             with torch.no_grad():

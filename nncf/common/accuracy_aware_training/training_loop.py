@@ -29,8 +29,8 @@ from nncf.common.utils.backend import __nncf_backend__
 if __nncf_backend__ == 'Torch':
     from nncf.torch.accuracy_aware_training.runner import PTAccuracyAwareTrainingRunner as \
         AccuracyAwareTrainingRunner
-    from nncf.torch.accuracy_aware_training.runner import PTEarlyStoppingTrainingRunner as \
-        EarlyStoppingTrainingRunner
+    from nncf.torch.accuracy_aware_training.runner import PTBaseTrainingRunner as \
+        TrainingRunner
 
 elif __nncf_backend__ == 'TensorFlow':
     from nncf.tensorflow.accuracy_aware_training.runner import TFAccuracyAwareTrainingRunner as \
@@ -76,7 +76,7 @@ class EarlyStoppingCompressionTrainingLoop(TrainingLoop):
                  training_config: NNCFConfig,
                  compression_controller: CompressionAlgorithmController,
                  runner_cls=None):
-        runner_cls = EarlyStoppingTrainingRunner if runner_cls is None else runner_cls
+        runner_cls = TrainingRunner if runner_cls is None else runner_cls
         early_stopping_config = self._get_early_stopping_config(training_config)
         self.runner = runner_cls(early_stopping_config)
         self.compression_controller = compression_controller
@@ -105,7 +105,7 @@ class EarlyStoppingCompressionTrainingLoop(TrainingLoop):
 
     def _get_early_stopping_config(self, nncf_config: NNCFConfig):
         compression_configs = nncf_config.get('compression', {})
-        early_stopping_config = compression_configs.get('early_stopping_training', None)
+        early_stopping_config = compression_configs.get('training', None)
         if early_stopping_config is None:
             raise RuntimeError('')
         return early_stopping_config

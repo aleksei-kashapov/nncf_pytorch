@@ -33,12 +33,11 @@ from nncf.torch.accuracy_aware_training.utils import is_main_process
 from nncf.common.utils.helpers import configure_accuracy_aware_paths
 from nncf.common.utils.logger import logger as nncf_logger
 from nncf.common.utils.tensorboard import prepare_for_tensorboard
-from nncf.common.accuracy_aware_training.runner import TrainingRunner
+from nncf.common.accuracy_aware_training.runner import BaseTrainingRunner
 from nncf.common.accuracy_aware_training.runner import BaseAccuracyAwareTrainingRunner
-from nncf.common.accuracy_aware_training.runner import BaseEarlyStoppingTrainingRunner
 
 
-class BasePTTrainingRunner(TrainingRunner):
+class PTBaseTrainingRunner(BaseTrainingRunner):
     """
     The Training Runner implementation for PyTorch training code.
     """
@@ -148,6 +147,39 @@ class BasePTTrainingRunner(TrainingRunner):
         if self.verbose:
             self._tensorboard_writer.add_scalar(key, data, step)
 
+    def load_best_checkpoint(self, model):
+        # load checkpoint with highest compression rate and positive acc budget
+        possible_checkpoint_rates = [comp_rate for (comp_rate, acc_budget) in self._compressed_training_history
+                                     if acc_budget >= 0]
+        if not possible_checkpoint_rates:
+            nncf_logger.warning('Could not produce a compressed model satisfying the set accuracy '
+                                'degradation criterion during training. Increasing the number of training '
+                                'epochs')
+        best_checkpoint_compression_rate = max(possible_checkpoint_rates)
+        resuming_checkpoint_path = self._best_checkpoints[best_checkpoint_compression_rate]
+        nncf_logger.info('Loading the best checkpoint found during training '
+                         '{}...'.format(resuming_checkpoint_path))
+        resuming_checkpoint = torch.load(resuming_checkpoint_path, map_location='cpu')
+        resuming_model_state_dict = resuming_checkpoint.get('state_dict', resuming_checkpoint)
+        load_state(model, resuming_model_state_dict, is_resume=True)
+
+
+class PTAccuracyAwareTrainingRunner(PTBaseTrainingRunner, BaseAccuracyAwareTrainingRunner):
+    def __init__(self, accuracy_aware_config,
+                 lr_updates_needed=True, verbose=True,
+                 minimal_compression_rate=0.05,
+                 maximal_compression_rate=0.95,
+                 validate_every_n_epochs=None,
+                 dump_checkpoints=True):
+        super().__init__(accuracy_aware_config, verbose,
+                         minimal_compression_rate,
+                         maximal_compression_rate,
+                         validate_every_n_epochs,
+                         dump_checkpoints)
+
+        self._base_lr_reduction_factor_during_search = 0.5
+        self.lr_updates_needed = lr_updates_needed
+
     def update_training_history(self, compression_rate, best_metric_value):
         best_accuracy_budget = best_metric_value - self.minimal_tolerable_accuracy
         self._compressed_training_history.append((compression_rate, best_accuracy_budget))
@@ -168,53 +200,3 @@ class BasePTTrainingRunner(TrainingRunner):
     @property
     def compressed_training_history(self):
         return dict(self._compressed_training_history)
-
-    def load_best_checkpoint(self, model):
-        # load checkpoint with highest compression rate and positive acc budget
-        possible_checkpoint_rates = [comp_rate for (comp_rate, acc_budget) in self._compressed_training_history
-                                     if acc_budget >= 0]
-        if not possible_checkpoint_rates:
-            nncf_logger.warning('Could not produce a compressed model satisfying the set accuracy '
-                                'degradation criterion during training. Increasing the number of training '
-                                'epochs')
-        best_checkpoint_compression_rate = max(possible_checkpoint_rates)
-        resuming_checkpoint_path = self._best_checkpoints[best_checkpoint_compression_rate]
-        nncf_logger.info('Loading the best checkpoint found during training '
-                         '{}...'.format(resuming_checkpoint_path))
-        resuming_checkpoint = torch.load(resuming_checkpoint_path, map_location='cpu')
-        resuming_model_state_dict = resuming_checkpoint.get('state_dict', resuming_checkpoint)
-        load_state(model, resuming_model_state_dict, is_resume=True)
-
-
-class PTAccuracyAwareTrainingRunner(BasePTTrainingRunner, BaseAccuracyAwareTrainingRunner):
-    def __init__(self, accuracy_aware_config,
-                 lr_updates_needed=True, verbose=True,
-                 minimal_compression_rate=0.05,
-                 maximal_compression_rate=0.95,
-                 validate_every_n_epochs=None,
-                 dump_checkpoints=True):
-        super().__init__(accuracy_aware_config, verbose,
-                         minimal_compression_rate,
-                         maximal_compression_rate,
-                         validate_every_n_epochs,
-                         dump_checkpoints)
-
-        self._base_lr_reduction_factor_during_search = 0.5
-        self.lr_updates_needed = lr_updates_needed
-
-
-class PTEarlyStoppingTrainingRunner(BasePTTrainingRunner, BaseEarlyStoppingTrainingRunner):
-    """
-    The Training Runner implementation for PyTorch training code.
-    """
-
-    def __init__(self, early_stopping_config,
-                 lr_updates_needed=True, verbose=True,
-                 validate_every_n_epochs=None,
-                 dump_checkpoints=True):
-        super().__init__(early_stopping_config, verbose,
-                         validate_every_n_epochs,
-                         dump_checkpoints)
-
-        self._base_lr_reduction_factor_during_search = 0.5
-        self.lr_updates_needed = lr_updates_needed

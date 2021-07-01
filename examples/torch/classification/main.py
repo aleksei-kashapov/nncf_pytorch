@@ -37,6 +37,7 @@ from torchvision.models import InceptionOutputs
 
 from examples.torch.common.execution import set_seed
 from nncf.common.utils.tensorboard import prepare_for_tensorboard
+from nncf.config.utils import is_nncf_training
 from nncf.config.utils import is_accuracy_aware_training
 from examples.torch.common.argparser import get_common_argument_parser
 from examples.torch.common.example_logger import logger
@@ -50,7 +51,7 @@ from examples.torch.common.utils import configure_logging, configure_paths, crea
     is_pretrained_model_requested, log_common_mlflow_params, SafeMLFLow, MockDataset, configure_device
 from examples.torch.common.utils import write_metrics
 from nncf.torch import AdaptiveCompressionTrainingLoop
-from nncf.torch import CompressionTrainingLoop
+from nncf.torch import EarlyStoppingCompressionTrainingLoop
 from nncf.torch import create_compressed_model
 from nncf.api.compression import CompressionStage
 from nncf.torch.dynamic_graph.graph_tracer import create_input_infos
@@ -209,7 +210,7 @@ def main_worker(current_gpu, config: SampleConfig):
         validate(val_loader, model, criterion, config)
 
     if config.mode.lower() == 'train':
-        if is_accuracy_aware_training(config):
+        if is_nncf_training(config):
             # validation function that returns the target metric value
             # pylint: disable=E1123
             def validate_fn(model, epoch):
@@ -229,14 +230,18 @@ def main_worker(current_gpu, config: SampleConfig):
                 optimizer, lr_scheduler = make_optimizer(params_to_optimize, config)
                 return optimizer, lr_scheduler
 
-            # instantiate and run accuracy-aware training loop
-            acc_aware_training_loop = CompressionTrainingLoop(nncf_config, compression_ctrl)
-            model = acc_aware_training_loop.run(model,
-                                                train_epoch_fn=train_epoch_fn,
-                                                validate_fn=validate_fn,
-                                                configure_optimizers_fn=configure_optimizers_fn,
-                                                tensorboard_writer=config.tb,
-                                                log_dir=config.log_dir)
+            if is_accuracy_aware_training(config):
+                # instantiate and run accuracy-aware training loop
+                training_loop = AdaptiveCompressionTrainingLoop(nncf_config, compression_ctrl)
+            else:
+                # instantiate and run accuracy-aware training loop
+                training_loop = EarlyStoppingCompressionTrainingLoop(nncf_config, compression_ctrl)
+            model = training_loop.run(model,
+                                      train_epoch_fn=train_epoch_fn,
+                                      validate_fn=validate_fn,
+                                      configure_optimizers_fn=configure_optimizers_fn,
+                                      tensorboard_writer=config.tb,
+                                      log_dir=config.log_dir)
         else:
             train(config, compression_ctrl, model, criterion, train_criterion_fn, lr_scheduler, model_name, optimizer,
                   train_loader, train_sampler, val_loader, best_acc1)
@@ -406,6 +411,7 @@ def create_data_loaders(config, train_dataset, val_dataset):
                                                                         shuffle=dist_sampler_shuffle)
 
     train_shuffle = train_sampler is None and config.seed is None
+
     def create_train_data_loader(batch_size_):
         return torch.utils.data.DataLoader(
             train_dataset, batch_size=batch_size_, shuffle=train_shuffle,

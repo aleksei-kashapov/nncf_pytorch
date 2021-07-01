@@ -29,6 +29,9 @@ from nncf.common.utils.backend import __nncf_backend__
 if __nncf_backend__ == 'Torch':
     from nncf.torch.accuracy_aware_training.runner import PTAccuracyAwareTrainingRunner as \
         AccuracyAwareTrainingRunner
+    from nncf.torch.accuracy_aware_training.runner import PTEarlyStoppingTrainingRunner as \
+        EarlyStoppingTrainingRunner
+
 elif __nncf_backend__ == 'TensorFlow':
     from nncf.tensorflow.accuracy_aware_training.runner import TFAccuracyAwareTrainingRunner as \
         AccuracyAwareTrainingRunner
@@ -63,7 +66,7 @@ class TrainingLoop(ABC):
         """
 
 
-class CompressionTrainingLoop(TrainingLoop):
+class EarlyStoppingCompressionTrainingLoop(TrainingLoop):
     """
     Adaptive compression training loop allows an accuracy-aware training process
     to reach the maximal accuracy drop
@@ -73,8 +76,9 @@ class CompressionTrainingLoop(TrainingLoop):
                  training_config: NNCFConfig,
                  compression_controller: CompressionAlgorithmController,
                  runner_cls=None):
-        runner_cls = AccuracyAwareTrainingRunner if runner_cls is None else runner_cls
-        self.runner = runner_cls(training_config.get('compression').get('accuracy_aware_training'))
+        runner_cls = EarlyStoppingTrainingRunner if runner_cls is None else runner_cls
+        early_stopping_config = self._get_early_stopping_config(training_config)
+        self.runner = runner_cls(early_stopping_config)
         self.compression_controller = compression_controller
 
     def run(self, model, train_epoch_fn, validate_fn,
@@ -84,7 +88,7 @@ class CompressionTrainingLoop(TrainingLoop):
         self.runner.retrieve_original_accuracy(model)
 
         self.runner.configure_optimizers()
-        for epoch in range(self.runner.initial_training_phase_epochs):
+        for epoch in range(self.runner.maximal_total_epochs):
             compressed_model_accuracy = self.runner.validate(model, self.compression_controller)
             accuracy_budget = compressed_model_accuracy - self.runner.minimal_tolerable_accuracy
             if accuracy_budget >= 0:
@@ -98,6 +102,14 @@ class CompressionTrainingLoop(TrainingLoop):
             self.runner.train_epoch(model, self.compression_controller)
 
         return model
+
+    def _get_early_stopping_config(self, nncf_config: NNCFConfig):
+        compression_configs = nncf_config.get('compression', {})
+        early_stopping_config = compression_configs.get('early_stopping_training', None)
+        if early_stopping_config is None:
+            raise RuntimeError('')
+        return early_stopping_config
+
 
 
 class AdaptiveCompressionTrainingLoop(TrainingLoop):
